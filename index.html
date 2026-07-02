@@ -66,11 +66,11 @@ faceImg.onload = () => {
   const x0 = Math.min(...xs), x1 = Math.max(...xs);
   const y0 = Math.min(...ys), y1 = Math.max(...ys);
   const H = 220, sc = H / (y1 - y0), Wp = Math.ceil((x1 - x0) * sc);
-  // 1) 누끼 (좌우반전: 달리는 방향을 보게)
+  // 1) 누끼 (원본 방향 그대로 = 오른쪽 보기)
   const cut = document.createElement('canvas');
   cut.width = Wp; cut.height = H;
   const cg = cut.getContext('2d');
-  cg.setTransform(-sc, 0, 0, sc, x1 * sc, -y0 * sc);
+  cg.setTransform(sc, 0, 0, sc, -x0 * sc, -y0 * sc);
   headPath(cg);
   cg.clip();
   cg.drawImage(faceImg, 0, 0);
