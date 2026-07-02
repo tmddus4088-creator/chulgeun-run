@@ -164,6 +164,12 @@ function sfxCrash(){
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
   s.connect(g); g.connect(master); s.start(t); s.stop(t + 0.35);
 }
+function sfxPower(){
+  // 무적 파워업 아르페지오
+  if (!AC) return;
+  const t = AC.currentTime;
+  [523, 659, 784, 1047, 1319].forEach((f, i) => tone('square', f, f, t + i * 0.07, 0.12, 0.07));
+}
 function sfxDooDoong(){
   // 뚜~둥!! (팀파니 두 방 + 쿵 노이즈)
   if (!AC) return;
@@ -208,6 +214,7 @@ let lastMile = 0, mileFlash = 0;
 let birdHintShown = false, birdHint = 0;
 let deadMsg = '', deadTimer = 0;
 let titleT = 0, introOn = false, introT = 0; // 타이틀 뚜둥 연출
+let inv = 0, headScale = 1; // 무적 시간 / 대두 크기
 let floats = [];            // 떠오르는 텍스트 (+10 아슬아슬! 등)
 let bubble = null, bubbleT = 0, nextBubble = 4; // 혼잣말 말풍선
 let mileMsg = '';           // 마일스톤 드립
@@ -231,6 +238,7 @@ function reset(){
   head = null; birdHint = 0;
   floats = []; bubble = null; bubbleT = 0; nextBubble = 3 + rnd() * 3;
   phoneT = 0; phoneDone = {};
+  inv = 0; headScale = 1;
 }
 const GRAV = 2050, JUMP_V = -760;
 let jumpBuf = 0; // 착지 직전 입력 저장 (연타 편의)
@@ -248,7 +256,9 @@ function jump(){
 function spawn(){
   const r = rnd();
   let o;
-  if (rnd() < 0.12){ // 커피 아이템 (먹으면 보너스)
+  if (score > 120 && rnd() < 0.04){ // ⭐ 무적 별 (희귀)
+    o = {type:'star', item: true, x: W + 60, w: 32, h: 34, alt: rnd() < 0.5 ? 4 : 74};
+  } else if (rnd() < 0.12){ // 커피 아이템 (먹으면 보너스)
     o = {type:'coffee', item: true, x: W + 60, w: 30, h: 32, alt: rnd() < 0.5 ? 4 : 74};
   } else if (score > 150 && r < 0.14){
     o = {type:'birdHigh', x: W + 60, w: 52, h: 30, alt: 132, flap: rnd() * 7};
@@ -273,15 +283,31 @@ function collide(){
   const px1 = P.x - 10, px2 = P.x + 10;
   const py2 = GROUND + P.y, py1 = py2 - 78;
   for (const o of obstacles){
+    if (o.fly) continue; // 이미 날아가는 중
     const pad = o.item ? -8 : 8; // 아이템은 후하게 먹힘
     const ox1 = o.x - o.w/2 + pad, ox2 = o.x + o.w/2 - pad;
     const oy2 = GROUND - o.alt - 5, oy1 = oy2 - o.h + 10 - (o.item ? 14 : 0);
     if (px1 < ox2 && px2 > ox1 && py1 < oy2 && py2 > oy1){
       if (o.item){
         o.dead = true;
-        score += 20; dist += 200;
-        addFloat(P.x, GROUND - 120, '카페인 충전⚡ +20', '#8d5a2b');
-        sfxDing();
+        if (o.type === 'star'){
+          inv = 7;
+          addFloat(P.x, GROUND - 130, '⭐ 무 적 !!', '#f39c12');
+          say('무적이다!! 다 비켜!!!');
+          sfxPower();
+        } else {
+          score += 20; dist += 200;
+          addFloat(P.x, GROUND - 120, '카페인 충전⚡ +20', '#8d5a2b');
+          sfxDing();
+        }
+        continue;
+      }
+      if (inv > 0){ // 무적: 대두 박치기로 날려버림
+        o.fly = {vx: 350 + rnd() * 150, vy: -(450 + rnd() * 250), vr: 8 + rnd() * 10, y: 0, rot: 0};
+        score += 5;
+        addFloat(o.x, GROUND - o.alt - o.h - 22, '뿌셔!! +5', '#9b59b6');
+        if (AC) tone('square', 200, 60, AC.currentTime, 0.15, 0.1);
+        if (navigator.vibrate) navigator.vibrate(30);
         continue;
       }
       return o;
@@ -471,14 +497,22 @@ function drawPlayer(t){
   // 가방
   ctx.fillStyle = '#8d6748';
   roundRect(-24, -52, 10, 20, 4); ctx.fill();
-  // 머리 (얼굴 스티커!)
-  const headY = -54 - 24 + (P.air ? -2 : Math.sin(dist * 0.09) * 1.5);
-  const rot = P.air ? -0.12 : Math.sin(dist * 0.045) * 0.06;
+  // 머리 (얼굴 스티커!) — 무적이면 개커진 대두
+  const hh = 62 * headScale, hw = hh * faceRatio;
+  const headY = -54 - 24 - (hh - 62) / 2 + (P.air ? -2 : Math.sin(dist * 0.09) * 1.5);
+  const rot = (P.air ? -0.12 : Math.sin(dist * 0.045) * 0.06) + (inv > 0 ? Math.sin(t * 18) * 0.07 : 0);
   ctx.save();
   ctx.translate(2, headY);
   ctx.rotate(rot);
+  if (inv > 0 && (inv > 1.5 || Math.sin(t * 16) > -0.2)){
+    // 무적 후광 (끝나기 직전엔 깜빡임)
+    const gr = ctx.createRadialGradient(0, 0, hh * 0.3, 0, 0, hh * 0.75);
+    gr.addColorStop(0, 'rgba(255,215,60,.75)');
+    gr.addColorStop(1, 'rgba(255,215,60,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.arc(0, 0, hh * 0.75, 0, 7); ctx.fill();
+  }
   if (faceSprite){
-    const hh = 62, hw = hh * faceRatio;
     ctx.drawImage(faceSprite, -hw / 2, -hh / 2, hw, hh);
   } else { // 사진 로딩 전 대체 얼굴
     ctx.fillStyle = '#ffd54f';
@@ -518,7 +552,19 @@ function drawObstacle(o, t){
   const gy = GROUND - o.alt;
   ctx.save();
   ctx.translate(o.x, gy);
-  if (o.type === 'coffee'){
+  if (o.fly){ ctx.translate(0, o.fly.y); ctx.rotate(o.fly.rot); }
+  if (o.type === 'star'){
+    const bob = Math.sin(t * 5 + o.x * 0.01) * 5;
+    const tw = 1 + Math.sin(t * 9) * 0.15;
+    ctx.save();
+    ctx.translate(0, -16 + bob);
+    ctx.scale(tw, tw);
+    ctx.font = '32px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('⭐', 0, 11);
+    ctx.restore();
+    ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#e67e22'; ctx.textAlign = 'center';
+    ctx.fillText('무적!', 0, -40 + bob);
+  } else if (o.type === 'coffee'){
     const bob = Math.sin(t * 5 + o.x * 0.01) * 4;
     ctx.font = '30px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('☕', 0, -4 + bob);
@@ -601,6 +647,17 @@ function drawUI(t){
   ctx.font = '26px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(muted ? '🔇' : '🔊', W - 42, 49);
+  // 무적 게이지
+  if (inv > 0){
+    const gw = 150, gx = W / 2 - gw / 2, gy2 = 30;
+    ctx.fillStyle = 'rgba(255,255,255,.8)';
+    roundRect(gx - 4, gy2 - 4, gw + 8, 18, 8); ctx.fill();
+    ctx.fillStyle = '#f39c12';
+    roundRect(gx, gy2, Math.max(6, gw * inv / 7), 10, 5); ctx.fill();
+    ctx.fillStyle = '#b7791f';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('⭐ 무 적 ⭐', W / 2, gy2 + 26);
+  }
   if (mileFlash > 0){
     ctx.fillStyle = 'rgba(38,48,58,' + Math.min(1, mileFlash) + ')';
     ctx.font = 'bold 25px sans-serif';
@@ -796,11 +853,23 @@ function loop(ms){
         if (jumpBuf > 0){ jumpBuf = 0; jump(); } // 미리 눌러둔 점프 실행
       }
     }
+    // 무적 타이머 + 대두 크기
+    inv -= dt;
+    const hs = inv > 0 ? 2.3 : 1;
+    headScale += (hs - headScale) * Math.min(1, dt * 7);
     // 장애물
     nextSpawn -= speed * dt;
     if (nextSpawn <= 0) spawn();
-    for (const o of obstacles) o.x -= speed * dt;
-    obstacles = obstacles.filter(o => o.x > -80 && !o.dead);
+    for (const o of obstacles){
+      o.x -= speed * dt;
+      if (o.fly){ // 대두 박치기로 날아가는 중
+        o.x += o.fly.vx * dt;
+        o.fly.vy += 1500 * dt;
+        o.fly.y += o.fly.vy * dt;
+        o.fly.rot += o.fly.vr * dt;
+      }
+    }
+    obstacles = obstacles.filter(o => o.x > -80 && o.x < W + 300 && !o.dead && !(o.fly && o.fly.y > 400));
     const hitObj = collide();
     if (hitObj) die(hitObj);
   } else if (state === 'dead'){
