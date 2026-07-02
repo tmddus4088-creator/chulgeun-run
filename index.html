@@ -233,11 +233,14 @@ function reset(){
   floats = []; bubble = null; bubbleT = 0; nextBubble = 3 + rnd() * 3;
   phoneT = 0; phoneDone = {};
 }
-const GRAV = 2200, JUMP_V = -720;
+const GRAV = 2050, JUMP_V = -760;
+let jumpBuf = 0; // 착지 직전 입력 저장 (연타 편의)
 function jump(){
   if (!P.air){
     P.vy = JUMP_V; P.air = true; sfxJump();
     if (rnd() < 0.18) say(['읏차!','흡!!','점프으으','으라차차'][Math.floor(rnd() * 4)]);
+  } else {
+    jumpBuf = 0.14;
   }
 }
 
@@ -267,13 +270,13 @@ function spawn(){
 }
 
 function collide(){
-  // 플레이어 판정 상자 (조금 후하게)
-  const px1 = P.x - 13, px2 = P.x + 13;
-  const py2 = GROUND + P.y, py1 = py2 - 82;
+  // 플레이어 판정 상자 (많이 후하게 — 스치는 건 봐줌)
+  const px1 = P.x - 10, px2 = P.x + 10;
+  const py2 = GROUND + P.y, py1 = py2 - 78;
   for (const o of obstacles){
-    const pad = o.item ? -8 : 5; // 아이템은 후하게 먹힘
+    const pad = o.item ? -8 : 8; // 아이템은 후하게 먹힘
     const ox1 = o.x - o.w/2 + pad, ox2 = o.x + o.w/2 - pad;
-    const oy2 = GROUND - o.alt - 3, oy1 = oy2 - o.h + 6 - (o.item ? 12 : 0);
+    const oy2 = GROUND - o.alt - 5, oy1 = oy2 - o.h + 10 - (o.item ? 14 : 0);
     if (px1 < ox2 && px2 > ox1 && py1 < oy2 && py2 > oy1){
       if (o.item){
         o.dead = true;
@@ -332,17 +335,10 @@ cv.addEventListener('pointerdown', e => {
   e.preventDefault();
   press(e.clientX * (devicePixelRatio > 2 ? 2 : devicePixelRatio || 1) / scale, e.clientY * (devicePixelRatio > 2 ? 2 : devicePixelRatio || 1) / scale);
 });
-cv.addEventListener('pointerup', () => {
-  // 짧게 누르면 낮은 점프
-  if (state === 'play' && P.air && P.vy < -260) P.vy = -260;
-});
 addEventListener('keydown', e => {
   if (e.repeat) return;
   if (e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); press(-999, -999); }
   if (e.code === 'KeyM') setMute(!muted);
-});
-addEventListener('keyup', e => {
-  if ((e.code === 'Space' || e.code === 'ArrowUp') && state === 'play' && P.air && P.vy < -260) P.vy = -260;
 });
 addEventListener('contextmenu', e => e.preventDefault());
 
@@ -792,10 +788,14 @@ function loop(ms){
     for (const f of floats) f.t += dt;
     floats = floats.filter(f => f.t < 1.2);
     // 점프 물리
+    jumpBuf -= dt;
     if (P.air){
       P.vy += GRAV * dt;
       P.y += P.vy * dt;
-      if (P.y >= 0){ P.y = 0; P.vy = 0; P.air = false; }
+      if (P.y >= 0){
+        P.y = 0; P.vy = 0; P.air = false;
+        if (jumpBuf > 0){ jumpBuf = 0; jump(); } // 미리 눌러둔 점프 실행
+      }
     }
     // 장애물
     nextSpawn -= speed * dt;
