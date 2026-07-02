@@ -35,6 +35,8 @@ function resize(){
   if (cv.width !== Math.floor(iw * dpr) || cv.height !== Math.floor(ih * dpr)){
     cv.width = Math.floor(iw * dpr);
     cv.height = Math.floor(ih * dpr);
+    cv.style.width = iw + 'px';   // 화면 크기에 맞춤 (고해상도 폰 확대 방지)
+    cv.style.height = ih + 'px';
   }
   scale = Math.min(cv.height / 360, cv.width / 500);
   W = cv.width / scale;
