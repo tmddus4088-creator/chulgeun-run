@@ -245,7 +245,10 @@ let jumpBuf = 0; // 착지 직전 입력 저장 (연타 편의)
 function jump(){
   if (!P.air){
     P.vy = JUMP_V; P.air = true; sfxJump();
-    if (rnd() < 0.18) say(['읏차!','흡!!','점프으으','으라차차'][Math.floor(rnd() * 4)]);
+    if (rnd() < 0.25){
+      const J = ['승연아!!','이승연!!!','승연이한테 간다!!','보고싶다아아','승연 점프!','읏차!'];
+      say(J[Math.floor(rnd() * J.length)]);
+    }
   } else {
     jumpBuf = 0.14;
   }
