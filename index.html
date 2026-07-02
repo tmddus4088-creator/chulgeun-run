@@ -757,7 +757,7 @@ function loop(ms){
     }
   }
   if (state === 'play'){
-    speed = 280 + Math.min(400, score * 0.5); // 완만하게 상승 (800점에 최고속도)
+    speed = 280 + Math.min(360, score * 0.2); // 아주 완만하게 상승 (1800점에 최고속도, 최고치도 하향)
     dist += speed * dt;
     score = Math.floor(dist / 10);
     if (score - lastMile >= 100){
