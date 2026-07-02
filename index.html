@@ -208,20 +208,36 @@ let lastMile = 0, mileFlash = 0;
 let birdHintShown = false, birdHint = 0;
 let deadMsg = '', deadTimer = 0;
 let titleT = 0, introOn = false, introT = 0; // 타이틀 뚜둥 연출
+let floats = [];            // 떠오르는 텍스트 (+10 아슬아슬! 등)
+let bubble = null, bubbleT = 0, nextBubble = 4; // 혼잣말 말풍선
+let mileMsg = '';           // 마일스톤 드립
+let phoneT = 0, phoneDone = {}; // 부장님 전화 이벤트
+const TALKS = ['아 지각이다!!','커피 마시고 싶다...','월요일 실화냐','어제 야근했는데...',
+  '버스 어딨어!!','다리야 힘내...','오늘도 달린다','부장님 죄송합니다',
+  '알람 왜 안 울렸지','재택하고 싶다','비둘기 저리 가!!','헉헉...'];
+const MILES = ['스피드 업! 🔥','아직 여유롭죠? ㅎㅎ','저기 버스가 방금 떠났다...','벌써 다리가 후들후들',
+  '커피 없인 못 달려','이미 지각인데 왜 뛰는 걸까','사무실이 코앞! ...일까?','전설의 출근러 등극!!'];
+function addFloat(x, y, txt, color){
+  floats.push({x, y, txt, color: color || '#e67e22', t: 0});
+}
+function say(txt){ bubble = txt; bubbleT = 2.2; }
 let head = null; // 사망 시 굴러가는 머리
 const P = {x: 110, y: 0, vy: 0, air: false};
 const rnd = Math.random;
 
 function reset(){
-  dist = 0; speed = 300; score = 0; lastMile = 0; mileFlash = 0;
+  dist = 0; speed = 280; score = 0; lastMile = 0; mileFlash = 0;
   obstacles = []; nextSpawn = 700;
   P.y = 0; P.vy = 0; P.air = false;
   head = null; birdHint = 0;
+  floats = []; bubble = null; bubbleT = 0; nextBubble = 3 + rnd() * 3;
+  phoneT = 0; phoneDone = {};
 }
 const GRAV = 2200, JUMP_V = -720;
 function jump(){
   if (!P.air){
     P.vy = JUMP_V; P.air = true; sfxJump();
+    if (rnd() < 0.18) say(['읏차!','흡!!','점프으으','으라차차'][Math.floor(rnd() * 4)]);
   }
 }
 
@@ -230,14 +246,18 @@ function jump(){
 function spawn(){
   const r = rnd();
   let o;
-  if (score > 150 && r < 0.15){
+  if (rnd() < 0.12){ // 커피 아이템 (먹으면 보너스)
+    o = {type:'coffee', item: true, x: W + 60, w: 30, h: 32, alt: rnd() < 0.5 ? 4 : 74};
+  } else if (score > 150 && r < 0.14){
     o = {type:'birdHigh', x: W + 60, w: 52, h: 30, alt: 132, flap: rnd() * 7};
     if (!birdHintShown){ birdHintShown = true; birdHint = 3.5; }
-  } else if (score > 60 && r < 0.32){
+  } else if (score > 80 && r < 0.26){
+    o = {type:'poo', x: W + 60, w: 30, h: 26, alt: 0};
+  } else if (score > 60 && r < 0.4){
     o = {type:'bird', x: W + 60, w: 52, h: 30, alt: 34, flap: rnd() * 7};
-  } else if (r < 0.6){
+  } else if (r < 0.62){
     o = {type:'cone', x: W + 60, w: 30, h: 38, alt: 0};
-  } else if (r < 0.85 || score < 100){
+  } else if (r < 0.86 || score < 100){
     o = {type:'box', x: W + 60, w: 42, h: 40, alt: 0};
   } else {
     o = {type:'box2', x: W + 60, w: 42, h: 72, alt: 0};
@@ -251,16 +271,38 @@ function collide(){
   const px1 = P.x - 13, px2 = P.x + 13;
   const py2 = GROUND + P.y, py1 = py2 - 82;
   for (const o of obstacles){
-    const ox1 = o.x - o.w/2 + 5, ox2 = o.x + o.w/2 - 5;
-    const oy2 = GROUND - o.alt - 3, oy1 = oy2 - o.h + 6;
-    if (px1 < ox2 && px2 > ox1 && py1 < oy2 && py2 > oy1) return o;
+    const pad = o.item ? -8 : 5; // 아이템은 후하게 먹힘
+    const ox1 = o.x - o.w/2 + pad, ox2 = o.x + o.w/2 - pad;
+    const oy2 = GROUND - o.alt - 3, oy1 = oy2 - o.h + 6 - (o.item ? 12 : 0);
+    if (px1 < ox2 && px2 > ox1 && py1 < oy2 && py2 > oy1){
+      if (o.item){
+        o.dead = true;
+        score += 20; dist += 200;
+        addFloat(P.x, GROUND - 120, '카페인 충전⚡ +20', '#8d5a2b');
+        sfxDing();
+        continue;
+      }
+      return o;
+    }
+    // 아슬아슬 보너스: 장애물 위를 간발의 차로 통과
+    if (!o.item && !o.near && P.air && o.alt < 60 && Math.abs(o.x - P.x) < 8){
+      const clearance = -P.y - (o.alt + o.h);
+      if (clearance > 0 && clearance < 30){
+        o.near = true;
+        score += 10;
+        addFloat(P.x, GROUND - 130, '아슬아슬! +10', '#e74c3c');
+        sfxDing();
+        if (rnd() < 0.5) say(rnd() < 0.5 ? '휴 살았다;;' : '방금 스쳤어!!');
+      }
+    }
   }
   return null;
 }
 
 const DEAD_MSGS = {
-  cone: '라바콘: 미안합니다;;', box: '택배는 소중하니까...', box2: '택배탑 등반 실패!',
-  bird: '비둘기의 승리 🐦', birdHigh: '높은 비둘기는 점프 금지랬죠!!'
+  cone: '라바콘에 걸려 넘어짐', box: '택배와 정면충돌', box2: '택배탑 등반 실패',
+  bird: '비둘기에게 패배함', birdHigh: '높은 비둘기 앞에서 점프함 (금지랬는데)',
+  poo: '출근길에 그것을 밟아버림... 💩'
 };
 function die(o){
   state = 'dead'; deadTimer = 0;
@@ -481,7 +523,27 @@ function drawObstacle(o, t){
   const gy = GROUND - o.alt;
   ctx.save();
   ctx.translate(o.x, gy);
-  if (o.type === 'cone'){
+  if (o.type === 'coffee'){
+    const bob = Math.sin(t * 5 + o.x * 0.01) * 4;
+    ctx.font = '30px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('☕', 0, -4 + bob);
+    ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#8d5a2b';
+    ctx.fillText('+20', 0, -34 + bob);
+  } else if (o.type === 'poo'){
+    ctx.fillStyle = 'rgba(0,0,0,.12)';
+    ctx.beginPath(); ctx.ellipse(0, 1, 15, 4, 0, 0, 7); ctx.fill();
+    ctx.font = '28px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('💩', 0, -2);
+    // 김 모락모락
+    ctx.strokeStyle = 'rgba(120,90,60,.5)'; ctx.lineWidth = 1.5;
+    for (const dx of [-7, 3]){
+      const ph = t * 3 + dx;
+      ctx.beginPath();
+      ctx.moveTo(dx, -26);
+      ctx.quadraticCurveTo(dx + Math.sin(ph) * 4, -33, dx, -40);
+      ctx.stroke();
+    }
+  } else if (o.type === 'cone'){
     ctx.fillStyle = 'rgba(0,0,0,.15)';
     ctx.beginPath(); ctx.ellipse(0, 2, 18, 5, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#f2711c';
@@ -546,13 +608,53 @@ function drawUI(t){
   ctx.fillText(muted ? '🔇' : '🔊', W - 42, 49);
   if (mileFlash > 0){
     ctx.fillStyle = 'rgba(38,48,58,' + Math.min(1, mileFlash) + ')';
-    ctx.font = 'bold 26px sans-serif';
-    ctx.fillText('스피드 업! 🔥', W / 2, GROUND * 0.35);
+    ctx.font = 'bold 25px sans-serif';
+    ctx.fillText(mileMsg, W / 2, GROUND * 0.35);
   }
   if (birdHint > 0){
     ctx.fillStyle = 'rgba(200,60,60,' + Math.min(1, birdHint) + ')';
     ctx.font = 'bold 22px sans-serif';
     ctx.fillText('⚠️ 높이 나는 비둘기는 점프 금지!', W / 2, GROUND * 0.25);
+  }
+  // 떠오르는 보너스 텍스트
+  for (const f of floats){
+    ctx.globalAlpha = 1 - f.t / 1.2;
+    ctx.fillStyle = f.color;
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillText(f.txt, f.x, f.y - f.t * 45);
+    ctx.globalAlpha = 1;
+  }
+  // 혼잣말 말풍선
+  if (bubbleT > 0 && bubble && state === 'play'){
+    const bx = P.x + 20, by = GROUND + P.y - 132;
+    ctx.font = 'bold 15px sans-serif';
+    const tw = ctx.measureText(bubble).width;
+    ctx.fillStyle = 'rgba(255,255,255,.95)';
+    ctx.strokeStyle = '#26303a'; ctx.lineWidth = 2;
+    roundRect(bx - 8, by - 22, tw + 16, 30, 10);
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath(); // 꼬리
+    ctx.moveTo(bx + 2, by + 8); ctx.lineTo(bx - 6, by + 20); ctx.lineTo(bx + 14, by + 8);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.fill();
+    ctx.fillStyle = '#26303a'; ctx.textAlign = 'left';
+    ctx.fillText(bubble, bx, by);
+    ctx.textAlign = 'center';
+  }
+  // 부장님 전화 배너
+  if (phoneT > 0){
+    const shake = Math.sin(phoneT * 40) * 3;
+    const bw = Math.min(W - 40, 330);
+    ctx.save();
+    ctx.translate(W / 2 + shake, 86);
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
+    roundRect(-bw / 2, -24, bw, 52, 12); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#26303a'; ctx.font = 'bold 17px sans-serif';
+    ctx.fillText('📳 부장님 전화옴!!!', 0, -2);
+    ctx.fillStyle = '#e74c3c'; ctx.font = '13px sans-serif';
+    ctx.fillText('(지금 받으면 죽습니다. 달리세요)', 0, 18);
+    ctx.restore();
   }
 }
 
@@ -625,9 +727,12 @@ function drawDead(t){
   ctx.fillStyle = '#e74c3c';
   ctx.font = 'bold 34px sans-serif';
   ctx.fillText('꽝! 지각이다!!', W / 2, cy - 58);
+  ctx.fillStyle = '#8a97a5';
+  ctx.font = '13px sans-serif';
+  ctx.fillText('─── 지 각 사 유 서 ───', W / 2, cy - 34);
   ctx.fillStyle = '#4a5866';
-  ctx.font = '17px sans-serif';
-  ctx.fillText(deadMsg, W / 2, cy - 26);
+  ctx.font = '16px sans-serif';
+  ctx.fillText('사유: ' + deadMsg, W / 2, cy - 12);
   ctx.fillStyle = '#26303a';
   ctx.font = 'bold 28px sans-serif';
   ctx.fillText('점수 ' + score, W / 2, cy + 16);
@@ -657,11 +762,35 @@ function loop(ms){
     }
   }
   if (state === 'play'){
-    speed = 300 + Math.min(400, score * 1.6);
+    speed = 280 + Math.min(400, score * 0.5); // 완만하게 상승 (800점에 최고속도)
     dist += speed * dt;
     score = Math.floor(dist / 10);
-    if (score - lastMile >= 100){ lastMile += 100; mileFlash = 1.6; sfxDing(); }
+    if (score - lastMile >= 100){
+      mileMsg = MILES[Math.min(MILES.length - 1, lastMile / 100)];
+      lastMile += 100; mileFlash = 2; sfxDing();
+    }
     mileFlash -= dt; birdHint -= dt;
+    // 혼잣말 말풍선
+    bubbleT -= dt; nextBubble -= dt;
+    if (nextBubble <= 0){
+      say(TALKS[Math.floor(rnd() * TALKS.length)]);
+      nextBubble = 4.5 + rnd() * 4;
+    }
+    // 부장님 전화 이벤트
+    phoneT -= dt;
+    for (const ps of [230, 550, 900]){
+      if (score >= ps && !phoneDone[ps]){
+        phoneDone[ps] = true; phoneT = 3.2;
+        if (navigator.vibrate) navigator.vibrate([80, 60, 80, 60, 80]);
+        if (AC){ const t0 = AC.currentTime;
+          tone('square', 880, 880, t0, 0.1, 0.06); tone('square', 880, 880, t0 + 0.15, 0.1, 0.06);
+          tone('square', 880, 880, t0 + 0.5, 0.1, 0.06); tone('square', 880, 880, t0 + 0.65, 0.1, 0.06); }
+        say('헉 부장님!!');
+      }
+    }
+    // 떠오르는 텍스트
+    for (const f of floats) f.t += dt;
+    floats = floats.filter(f => f.t < 1.2);
     // 점프 물리
     if (P.air){
       P.vy += GRAV * dt;
@@ -672,7 +801,7 @@ function loop(ms){
     nextSpawn -= speed * dt;
     if (nextSpawn <= 0) spawn();
     for (const o of obstacles) o.x -= speed * dt;
-    obstacles = obstacles.filter(o => o.x > -80);
+    obstacles = obstacles.filter(o => o.x > -80 && !o.dead);
     const hitObj = collide();
     if (hitObj) die(hitObj);
   } else if (state === 'dead'){
