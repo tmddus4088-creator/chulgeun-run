@@ -259,7 +259,7 @@ function jump(){
 function spawn(){
   const r = rnd();
   let o;
-  if (score > 120 && rnd() < 0.04){ // ⭐ 무적 별 (희귀)
+  if (score > 60 && rnd() < 0.09 && inv <= 0){ // ⭐ 무적 별
     o = {type:'star', item: true, x: W + 60, w: 32, h: 34, alt: rnd() < 0.5 ? 4 : 74};
   } else if (rnd() < 0.12){ // 커피 아이템 (먹으면 보너스)
     o = {type:'coffee', item: true, x: W + 60, w: 30, h: 32, alt: rnd() < 0.5 ? 4 : 74};
