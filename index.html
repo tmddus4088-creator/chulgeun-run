@@ -539,6 +539,12 @@ function drawPlayer(t){
     ctx.beginPath(); ctx.arc(0, 0, 25, 0, 7); ctx.fill();
   }
   ctx.restore();
+  // 머리 위 버전 아이콘 (승연=하트, 웅기=불)
+  if (state === 'play'){
+    const bobI = Math.sin(t * 6) * 3;
+    ctx.font = '22px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(mode === 'wg' ? '🔥' : '💖', 2, headY - hh / 2 - 8 + bobI);
+  }
   ctx.restore();
 }
 
