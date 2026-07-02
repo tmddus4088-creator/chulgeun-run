@@ -219,8 +219,14 @@ let floats = [];            // 떠오르는 텍스트 (+10 아슬아슬! 등)
 let bubble = null, bubbleT = 0, nextBubble = 4; // 혼잣말 말풍선
 let mileMsg = '';           // 마일스톤 드립
 let phoneT = 0, phoneDone = {}; // 부장님 전화 이벤트
-const TALKS = ['이승연 보고싶다','이승연 최고','승연이 보러가야징','승연아 내가간다!',
+let mode = 'sy'; // 'sy' 승연 버전 | 'wg' 웅기 버전
+const TALKS_SY = ['이승연 보고싶다','이승연 최고','승연이 보러가야징','승연아 내가간다!',
   '승연아 조금만 기다려!','오늘 승연이 만나는 날♥','승연이 생각하니까 힘난다!!','이승연!!!'];
+const TALKS_WG = ['웅기 ㄱㅅㄲ..','아 웅기 진짜;;','웅기 때문에 늦었잖아','웅기야 두고보자',
+  '웅기 손절각','웅기 넌 내일 죽었다','웅기가 알람 껐음이 분명해','웅기 >> 💩'];
+const JUMPS_SY = ['승연아!!','이승연!!!','승연이한테 간다!!','보고싶다아아','승연 점프!','읏차!'];
+const JUMPS_WG = ['웅기 뛰어넘듯이!!','이게 다 웅기 때문','웅기 각오해라','으라차차','읏차!'];
+function TALKS(){ return mode === 'wg' ? TALKS_WG : TALKS_SY; }
 const MILES = ['스피드 업! 🔥','아직 여유롭죠? ㅎㅎ','저기 버스가 방금 떠났다...','벌써 다리가 후들후들',
   '커피 없인 못 달려','이미 지각인데 왜 뛰는 걸까','사무실이 코앞! ...일까?','전설의 출근러 등극!!'];
 function addFloat(x, y, txt, color){
@@ -246,7 +252,7 @@ function jump(){
   if (!P.air){
     P.vy = JUMP_V; P.air = true; sfxJump();
     if (rnd() < 0.25){
-      const J = ['승연아!!','이승연!!!','승연이한테 간다!!','보고싶다아아','승연 점프!','읏차!'];
+      const J = mode === 'wg' ? JUMPS_WG : JUMPS_SY;
       say(J[Math.floor(rnd() * J.length)]);
     }
   } else {
@@ -354,7 +360,18 @@ function press(x, y){
     setMute(!muted); return;
   }
   if (state === 'title'){
-    if (!introOn){ introOn = true; introT = 0; sfxDooDoong(); }
+    if (!introOn){
+      for (const b of titleBtns()){
+        if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h){
+          mode = b.id;
+          introOn = true; introT = 0; sfxDooDoong();
+          break;
+        }
+      }
+      if (x === -999){ // 키보드는 승연 버전으로 시작
+        mode = 'sy'; introOn = true; introT = 0; sfxDooDoong();
+      }
+    }
   }
   else if (state === 'play') jump();
   else if (state === 'dead' && deadTimer > 0.7){ state = 'play'; reset(); introOn = false; }
@@ -706,13 +723,20 @@ function drawUI(t){
     ctx.strokeStyle = '#e74c3c'; ctx.lineWidth = 3;
     roundRect(-bw / 2, -24, bw, 52, 12); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#26303a'; ctx.font = 'bold 17px sans-serif';
-    ctx.fillText('📳 웅기 전화옴!!!', 0, -2);
+    ctx.fillText(mode === 'wg' ? '📳 웅기 전화옴!!!' : '📳 승연이 전화옴!!!💖', 0, -2);
     ctx.fillStyle = '#e74c3c'; ctx.font = '13px sans-serif';
-    ctx.fillText('(지금 받으면 죽습니다. 달리세요)', 0, 18);
+    ctx.fillText(mode === 'wg' ? '(지금 받으면 죽습니다. 달리세요)' : '(받고 싶다... 하지만 달려야 한다)', 0, 18);
     ctx.restore();
   }
 }
 
+function titleBtns(){
+  const bw = Math.min(205, (W - 64) / 2), bh = 66, cy = GROUND * 0.9;
+  return [
+    {id:'sy', x: W/2 - bw - 10, y: cy - bh/2, w: bw, h: bh, label:'💖 승연 버전', sub:'사랑꾼 모드', color:'#e84393'},
+    {id:'wg', x: W/2 + 10, y: cy - bh/2, w: bw, h: bh, label:'🤬 웅기 버전', sub:'분노의 질주', color:'#e17055'}
+  ];
+}
 function drawTitle(t){
   ctx.save();
   // 뚜둥 화면 흔들림
@@ -754,18 +778,29 @@ function drawTitle(t){
     ctx.fillText('뚜 둥 ~ !!', 0, 0);
     ctx.restore();
   } else {
-    ctx.font = '19px sans-serif';
+    ctx.font = '18px sans-serif';
     ctx.fillStyle = '#3a4a5a';
-    ctx.fillText('장애물이 나오면 화면을 터치! 점프!', W / 2, GROUND * 0.8);
-    if (Math.sin(t * 4) > -0.3){
-      ctx.font = 'bold 24px sans-serif';
-      ctx.fillStyle = '#e74c3c';
-      ctx.fillText('▶ 터치해서 출근 시작', W / 2, GROUND * 0.93);
+    ctx.fillText('장애물이 나오면 화면을 터치! 점프!', W / 2, GROUND * 0.75);
+    ctx.font = 'bold 20px sans-serif';
+    ctx.fillStyle = '#e74c3c';
+    if (Math.sin(t * 4) > -0.5) ctx.fillText('▼ 버전을 골라서 출근 시작!', W / 2, GROUND * 0.82);
+    // 버전 선택 버튼
+    for (const b of titleBtns()){
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = b.color; ctx.lineWidth = 3.5;
+      roundRect(b.x, b.y, b.w, b.h, 15);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#26303a';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText(b.label, b.x + b.w/2, b.y + 28);
+      ctx.fillStyle = b.color;
+      ctx.font = '13px sans-serif';
+      ctx.fillText(b.sub, b.x + b.w/2, b.y + 50);
     }
     if (hi > 0){
       ctx.font = '15px sans-serif';
       ctx.fillStyle = '#4a5866';
-      ctx.fillText('최고 기록: ' + hi, W / 2, GROUND * 1.03);
+      ctx.fillText('최고 기록: ' + hi, W / 2, GROUND * 1.06);
     }
   }
   ctx.restore();
@@ -828,7 +863,8 @@ function loop(ms){
     // 혼잣말 말풍선
     bubbleT -= dt; nextBubble -= dt;
     if (nextBubble <= 0){
-      say(TALKS[Math.floor(rnd() * TALKS.length)]);
+      const T = TALKS();
+      say(T[Math.floor(rnd() * T.length)]);
       nextBubble = 4.5 + rnd() * 4;
     }
     // 부장님 전화 이벤트
@@ -840,7 +876,7 @@ function loop(ms){
         if (AC){ const t0 = AC.currentTime;
           tone('square', 880, 880, t0, 0.1, 0.06); tone('square', 880, 880, t0 + 0.15, 0.1, 0.06);
           tone('square', 880, 880, t0 + 0.5, 0.1, 0.06); tone('square', 880, 880, t0 + 0.65, 0.1, 0.06); }
-        say('웅기 ㄱㅅㄲ..');
+        say(mode === 'wg' ? '웅기 ㄱㅅㄲ..' : '승연아 이따 전화할게ㅠㅠ');
       }
     }
     // 떠오르는 텍스트
